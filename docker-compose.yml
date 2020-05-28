@@ -1,0 +1,62 @@
+version: "3"
+
+volumes:
+  npm-cache:
+    driver: local
+  mysql_socket:
+    driver: local
+
+services:
+  database:
+    image: "mysql:5.7"
+    command: --character-set-server=utf8 --collation-server=utf8_unicode_ci --default-authentication-plugin=mysql_native_password
+    volumes:
+      - ./initdb.sql:/docker-entrypoint-initdb.d/init.sql
+      - mysql_socket:/var/run/mysqld
+    environment:
+      - MYSQL_ROOT_PASSWORD=pass1234
+
+  adminer:
+    image: adminer
+    restart: always
+    depends_on:
+      - database
+
+  backend:
+    image: codewars-backend
+    build: ./backend
+    working_dir: /app
+    environment:
+      - NODE_ENV=development
+    volumes:
+      - ./backend:/app
+      - npm-cache:/root/.npm
+      - /user_code:/user_code
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: "npm run dev"
+    depends_on:
+      - database
+  frontend:
+    image: codewars-frontend
+    build: ./frontend
+    working_dir: /app
+    environment:
+      - NODE_ENV=development
+    volumes:
+      - ./frontend:/app
+      - npm-cache:/root/.npm
+    command: "npm run serve"
+    depends_on:
+      - backend
+
+  nginx:
+    image: "nginx:1.17-alpine"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./nginx/conf.d:/etc/nginx/conf.d
+      - ./apidoc:/www/data
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+      - frontend
